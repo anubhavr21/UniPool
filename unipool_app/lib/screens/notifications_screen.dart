@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:unipool/services/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:unipool/models/notification.dart';
@@ -15,7 +15,7 @@ class NotificationsScreen extends StatefulWidget {
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
   Future<void> _markAllAsRead() async {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = authService.currentUser;
     if (user == null) return;
 
     final querySnapshot = await FirebaseFirestore.instance
@@ -41,7 +41,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser!;
+    final user = authService.currentUser!;
 
     return Scaffold(
       body: AppGradientBackground(

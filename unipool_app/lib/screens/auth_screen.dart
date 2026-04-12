@@ -1,9 +1,9 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:unipool/theme/app_theme.dart';
 import 'package:unipool/widgets/app_ui.dart';
+import 'package:unipool/services/auth_service.dart';
+import 'package:unipool/screens/home_screen.dart';
+import 'package:unipool/screens/forgot_password_screen.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -14,121 +14,33 @@ class AuthScreen extends StatefulWidget {
 
 class _AuthScreenState extends State<AuthScreen> {
   final emailController = TextEditingController();
+  final nameController = TextEditingController();
   final passwordController = TextEditingController();
+  final otpController = TextEditingController();
 
   bool obscure = true;
   bool loading = false;
-  bool googleLoading = false;
   bool isSignUp = false;
+  bool showOtpField = false;
 
   @override
   void dispose() {
     emailController.dispose();
+    nameController.dispose();
     passwordController.dispose();
+    otpController.dispose();
     super.dispose();
   }
 
   void _showSnack(String message, {bool isError = true}) {
-    if (!mounted) {
-      return;
-    }
-
+    if (!mounted) return;
     showAppSnackBar(context, message, isError: isError);
   }
 
-  Future<void> _showStatusDialog({
-    required String title,
-    required String message,
-    required IconData icon,
-    required Color color,
-  }) async {
-    if (!mounted) {
-      return;
-    }
-
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          backgroundColor: AppColors.surface,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-          ),
-          titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
-          contentPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          title: Row(
-            children: [
-              AppIconBadge(icon: icon, color: color),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    color: AppColors.ink,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 20,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          content: Text(
-            message,
-            style: const TextStyle(color: AppColors.muted, height: 1.5),
-          ),
-          actions: [
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('OK'),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<bool> _sendVerificationEmail(User user) async {
-    await user.reload();
-    final refreshedUser = FirebaseAuth.instance.currentUser ?? user;
-    if (refreshedUser.emailVerified) {
-      return false;
-    }
-
-    await refreshedUser.sendEmailVerification();
-    return true;
-  }
-
   Future<void> _resetPassword() async {
-    final email = emailController.text.trim();
-    if (email.isEmpty) {
-      _showSnack(
-        'Enter your email first so we know where to send the reset link.',
-        isError: true,
-      );
-      return;
-    }
-
-    try {
-      setState(() => loading = true);
-      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
-      await _showStatusDialog(
-        title: 'Reset email sent',
-        message:
-            'If an account exists for $email, Firebase has sent a password reset link. Check Inbox, Spam, and Promotions.',
-        icon: Icons.lock_reset_rounded,
-        color: AppColors.secondary,
-      );
-    } on FirebaseAuthException catch (e) {
-      _showSnack(e.message ?? 'Failed to send reset email.', isError: true);
-    } finally {
-      if (mounted) {
-        setState(() => loading = false);
-      }
-    }
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
+    );
   }
 
   Future<void> login() async {
@@ -136,200 +48,69 @@ class _AuthScreenState extends State<AuthScreen> {
     final password = passwordController.text.trim();
 
     if (email.isEmpty || password.isEmpty) {
-      _showSnack('Please enter your email and password.');
+      _showSnack('Please enter your email/username and password.');
       return;
     }
 
     setState(() => loading = true);
     try {
-      final cred = await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-
-      await cred.user?.reload();
-      final refreshedUser = FirebaseAuth.instance.currentUser;
-      final usesPasswordAuth =
-          refreshedUser?.providerData.any(
-            (provider) => provider.providerId == 'password',
-          ) ??
-          true;
-
-      if (usesPasswordAuth && !(refreshedUser?.emailVerified ?? false)) {
-        var resentLink = false;
-        try {
-          resentLink = await _sendVerificationEmail(cred.user!);
-        } on FirebaseAuthException {
-          // Even if resend fails, keep the user out until they verify.
-        }
-
-        await FirebaseAuth.instance.signOut();
-        await _showStatusDialog(
-          title: 'Email not verified',
-          message: resentLink
-              ? 'Please verify $email before signing in. A fresh verification link has been sent.'
-              : 'Please verify $email before signing in. If you already signed up recently, use the latest verification email in your inbox.',
-          icon: Icons.mark_email_unread_rounded,
-          color: AppColors.warning,
-        );
-        return;
-      }
-    } on FirebaseAuthException catch (e) {
-      String message;
-      switch (e.code) {
-        case 'user-not-found':
-          message = 'No account found with this email.';
-          break;
-        case 'wrong-password':
-          message = 'Incorrect password. Please try again.';
-          break;
-        case 'invalid-email':
-          message = 'That email address is not valid.';
-          break;
-        case 'user-disabled':
-          message = 'This account has been disabled.';
-          break;
-        case 'invalid-credential':
-          message = 'Invalid credentials. Check your email and password.';
-          break;
-        case 'too-many-requests':
-          message = 'Too many attempts. Please wait and try again.';
-          break;
-        default:
-          message = e.message ?? 'Login failed. Please try again.';
-      }
-      _showSnack(message);
-    } catch (_) {
-      _showSnack('Something went wrong. Please try again.');
-    } finally {
+      await authService.login(email, password);
       if (mounted) {
-        setState(() => loading = false);
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+        );
       }
+    } catch (e) {
+      _showSnack(e.toString());
+    } finally {
+      if (mounted) setState(() => loading = false);
     }
   }
 
   Future<void> signUp() async {
     final email = emailController.text.trim();
+    final name = nameController.text.trim();
     final password = passwordController.text.trim();
 
-    if (email.isEmpty || password.isEmpty) {
-      _showSnack('Please enter your email and password.');
+    if (email.isEmpty || password.isEmpty || (isSignUp && name.isEmpty)) {
+      _showSnack('Please fill all required fields.');
       return;
     }
-    if (password.length < 6) {
-      _showSnack('Password must be at least 6 characters.');
+    if (password.length < 8) {
+      _showSnack('Password must be at least 8 characters.');
       return;
     }
 
     setState(() => loading = true);
     try {
-      final cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-
-      final verificationSent = await _sendVerificationEmail(cred.user!);
-
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(cred.user!.uid)
-          .set({
-            'uid': cred.user!.uid,
-            'email': email,
-            'name': email.split('@').first,
-            'ridesCompleted': 0,
-            'createdAt': Timestamp.now(),
-          });
-
-      await FirebaseAuth.instance.signOut();
-      await _showStatusDialog(
-        title: 'Account created',
-        message: verificationSent
-            ? 'A verification link was sent to $email. Verify your email before logging in.'
-            : 'Your account was created, but the verification link could not be sent right now. Try logging in again to resend it.',
-        icon: Icons.verified_outlined,
-        color: verificationSent ? AppColors.secondary : AppColors.warning,
-      );
-
-      setState(() {
-        isSignUp = false;
-      });
-    } on FirebaseAuthException catch (e) {
-      String message;
-      switch (e.code) {
-        case 'email-already-in-use':
-          message = 'An account already exists with this email.';
-          break;
-        case 'invalid-email':
-          message = 'That email address is not valid.';
-          break;
-        case 'weak-password':
-          message = 'Password is too weak. Use at least 6 characters.';
-          break;
-        default:
-          message = e.message ?? 'Sign up failed. Please try again.';
-      }
-      _showSnack(message);
-    } catch (_) {
-      _showSnack('Something went wrong. Please try again.');
-    } finally {
-      if (mounted) {
-        setState(() => loading = false);
-      }
-    }
-  }
-
-  Future<void> _ensureGoogleProfile(User user) async {
-    final ref = FirebaseFirestore.instance.collection('users').doc(user.uid);
-    final snapshot = await ref.get();
-    if (snapshot.exists) {
-      return;
-    }
-
-    await ref.set({
-      'uid': user.uid,
-      'email': user.email,
-      'name': user.displayName ?? user.email?.split('@').first ?? 'Student',
-      'photoUrl': user.photoURL,
-      'ridesCompleted': 0,
-      'createdAt': Timestamp.now(),
-    });
-  }
-
-  Future<void> signInWithGoogle() async {
-    setState(() => googleLoading = true);
-    try {
-      final googleSignIn = GoogleSignIn(
-        clientId:
-            '809697685014-99n9i4i8fcehds7h1uosb59dtchjhcdg.apps.googleusercontent.com',
-      );
-
-      final googleUser = await googleSignIn.signIn();
-      if (googleUser == null) {
-        if (mounted) {
-          setState(() => googleLoading = false);
+      if (!showOtpField) {
+        // Request OTP
+        await authService.startRegistration(email);
+        setState(() => showOtpField = true);
+        _showSnack('OTP sent to your email. Please verify.', isError: false);
+      } else {
+        // Verify OTP and complete sign up
+        final otp = otpController.text.trim();
+        if (otp.isEmpty) {
+          _showSnack('Please enter the OTP.');
+          return;
         }
-        return;
+        await authService.verifyRegistration(
+          email: email,
+          name: name,
+          password: password,
+          otp: otp,
+        );
+        if (mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const HomeScreen()),
+          );
+        }
       }
-
-      final googleAuth = await googleUser.authentication;
-      final credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-
-      final cred = await FirebaseAuth.instance.signInWithCredential(credential);
-      if (cred.user != null) {
-        await _ensureGoogleProfile(cred.user!);
-      }
-    } on FirebaseAuthException catch (e) {
-      _showSnack(e.message ?? 'Google sign-in failed.');
-    } catch (_) {
-      _showSnack('Google sign-in failed. Please try again.');
+    } catch (e) {
+      _showSnack(e.toString());
     } finally {
-      if (mounted) {
-        setState(() => googleLoading = false);
-      }
+      if (mounted) setState(() => loading = false);
     }
   }
 
@@ -364,33 +145,23 @@ class _AuthScreenState extends State<AuthScreen> {
     return Column(
       children: [
         Container(
-          width: 74,
-          height: 74,
+          width: 74, height: 74,
           decoration: BoxDecoration(
             gradient: AppColors.warmGradient,
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
                 color: AppColors.accent.withValues(alpha: 0.24),
-                blurRadius: 24,
-                offset: const Offset(0, 12),
+                blurRadius: 24, offset: const Offset(0, 12),
               ),
             ],
           ),
-          child: const Icon(
-            Icons.local_taxi_rounded,
-            color: Colors.white,
-            size: 34,
-          ),
+          child: const Icon(Icons.local_taxi_rounded, color: Colors.white, size: 34),
         ),
         const SizedBox(height: 16),
         Text('UniPool', style: Theme.of(context).textTheme.displaySmall),
         const SizedBox(height: 8),
-        const Text(
-          'Campus rides, one place.',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: AppColors.muted, height: 1.45),
-        ),
+        const Text('Campus rides, one place.', textAlign: TextAlign.center, style: TextStyle(color: AppColors.muted, height: 1.45)),
       ],
     );
   }
@@ -402,30 +173,22 @@ class _AuthScreenState extends State<AuthScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const AppPill(
-            label: 'Welcome back',
+            label: 'Welcome',
             icon: Icons.key_rounded,
             foregroundColor: AppColors.primary,
             backgroundColor: Color(0xFF182543),
           ),
           const SizedBox(height: 18),
-          Text(
-            isSignUp ? 'Create your account' : 'Sign in to continue',
-            style: Theme.of(context).textTheme.headlineMedium,
-          ),
+          Text(isSignUp ? 'Create your account' : 'Sign in to continue', style: Theme.of(context).textTheme.headlineMedium),
           const SizedBox(height: 8),
           Text(
-            isSignUp
-                ? 'Create an account to start using UniPool.'
-                : 'Access your rides and messages.',
+            isSignUp ? 'Create an account to start using UniPool.' : 'Access your rides and messages.',
             style: const TextStyle(color: AppColors.muted, height: 1.45),
           ),
           const SizedBox(height: 24),
           Container(
             padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceSoft,
-              borderRadius: BorderRadius.circular(20),
-            ),
+            decoration: BoxDecoration(color: AppColors.surfaceSoft, borderRadius: BorderRadius.circular(20)),
             child: Row(
               children: [
                 _buildTabButton('Sign in', !isSignUp),
@@ -436,10 +199,17 @@ class _AuthScreenState extends State<AuthScreen> {
           const SizedBox(height: 22),
           _buildTextField(
             controller: emailController,
-            label: 'College email',
+            label: isSignUp ? 'Email' : 'Email / Username',
             icon: Icons.mail_outline_rounded,
-            keyboardType: TextInputType.emailAddress,
           ),
+          if (isSignUp && !showOtpField) ...[
+            const SizedBox(height: 16),
+            _buildTextField(
+              controller: nameController,
+              label: 'Full Name',
+              icon: Icons.person_outline_rounded,
+            ),
+          ],
           const SizedBox(height: 16),
           _buildTextField(
             controller: passwordController,
@@ -447,6 +217,15 @@ class _AuthScreenState extends State<AuthScreen> {
             icon: Icons.lock_outline_rounded,
             isPassword: true,
           ),
+          if (isSignUp && showOtpField) ...[
+            const SizedBox(height: 16),
+            _buildTextField(
+              controller: otpController,
+              label: 'Enter OTP sent to email',
+              icon: Icons.numbers_rounded,
+              keyboardType: TextInputType.number,
+            ),
+          ],
           if (!isSignUp) ...[
             const SizedBox(height: 8),
             Align(
@@ -461,45 +240,10 @@ class _AuthScreenState extends State<AuthScreen> {
           SizedBox(
             width: double.infinity,
             child: AppPrimaryButton(
-              label: isSignUp ? 'Create account' : 'Sign in',
+              label: isSignUp ? (showOtpField ? 'Verify & Create' : 'Next') : 'Sign in',
               icon: Icons.arrow_forward_rounded,
               isLoading: loading,
               onPressed: isSignUp ? signUp : login,
-            ),
-          ),
-          const SizedBox(height: 22),
-          Row(
-            children: const [
-              Expanded(child: Divider()),
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12),
-                child: Text(
-                  'OR',
-                  style: TextStyle(
-                    color: AppColors.muted,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-              Expanded(child: Divider()),
-            ],
-          ),
-          const SizedBox(height: 22),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: googleLoading ? null : signInWithGoogle,
-              icon: googleLoading
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2.2),
-                    )
-                  : const Icon(Icons.account_circle_outlined),
-              label: Text(
-                googleLoading ? 'Connecting...' : 'Continue with Google',
-              ),
             ),
           ),
           const SizedBox(height: 18),
@@ -513,7 +257,10 @@ class _AuthScreenState extends State<AuthScreen> {
                   style: const TextStyle(color: AppColors.muted),
                 ),
                 TextButton(
-                  onPressed: () => setState(() => isSignUp = !isSignUp),
+                  onPressed: () => setState(() {
+                    isSignUp = !isSignUp;
+                    showOtpField = false;
+                  }),
                   child: Text(isSignUp ? 'Sign in' : 'Create account'),
                 ),
               ],
@@ -527,7 +274,10 @@ class _AuthScreenState extends State<AuthScreen> {
   Widget _buildTabButton(String label, bool active) {
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() => isSignUp = label == 'Create account'),
+        onTap: () => setState(() {
+          isSignUp = label == 'Create account';
+          showOtpField = false; // Reset OTP field on tab switch
+        }),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.symmetric(vertical: 14),
@@ -537,12 +287,8 @@ class _AuthScreenState extends State<AuthScreen> {
             borderRadius: BorderRadius.circular(16),
           ),
           child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: active ? Colors.white : AppColors.muted,
-              fontWeight: FontWeight.w700,
-            ),
+            label, textAlign: TextAlign.center,
+            style: TextStyle(color: active ? Colors.white : AppColors.muted, fontWeight: FontWeight.w700),
           ),
         ),
       ),
@@ -568,9 +314,7 @@ class _AuthScreenState extends State<AuthScreen> {
             ? IconButton(
                 onPressed: () => setState(() => obscure = !obscure),
                 icon: Icon(
-                  obscure
-                      ? Icons.visibility_off_outlined
-                      : Icons.visibility_outlined,
+                  obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
                   color: AppColors.muted,
                 ),
               )

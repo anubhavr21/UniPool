@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:unipool/services/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:unipool/theme/app_theme.dart';
@@ -35,7 +35,7 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
 
-    final user = FirebaseAuth.instance.currentUser!;
+    final user = authService.currentUser!;
 
     await FirebaseFirestore.instance
         .collection('rides')
@@ -73,7 +73,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final currentUser = FirebaseAuth.instance.currentUser!;
+    final currentUser = authService.currentUser!;
 
     return Scaffold(
       body: AppGradientBackground(

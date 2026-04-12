@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:unipool/services/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:unipool/data/ride_locations.dart';
@@ -141,7 +141,7 @@ class _CreateRideScreenState extends State<CreateRideScreen> {
     setState(() => _submitting = true);
 
     try {
-      final user = FirebaseAuth.instance.currentUser!;
+      final user = authService.currentUser!;
       final userData = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
