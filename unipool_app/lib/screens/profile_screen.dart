@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:unipool/services/auth_service.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -41,7 +41,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _loadUserData() async {
-    final user = FirebaseAuth.instance.currentUser!;
+    final user = authService.currentUser!;
     final userData = await FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
@@ -73,7 +73,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _isUploading = true);
 
     try {
-      final user = FirebaseAuth.instance.currentUser!;
+      final user = authService.currentUser!;
       final storageRef = FirebaseStorage.instance
           .ref()
           .child('user_images')
@@ -102,7 +102,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _saveProfile() async {
-    final user = FirebaseAuth.instance.currentUser!;
+    final user = authService.currentUser!;
     setState(() => _isSaving = true);
 
     try {
@@ -126,7 +126,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = authService.currentUser;
     final displayName = _nameController.text.trim().isEmpty
         ? user?.email?.split('@').first ?? 'Student'
         : _nameController.text.trim();

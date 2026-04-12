@@ -1,4 +1,4 @@
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:unipool/services/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:unipool/screens/create_ride_screen.dart';
@@ -14,7 +14,7 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = authService.currentUser;
     final greetingName = _displayName(user);
 
     return Scaffold(
@@ -33,7 +33,12 @@ class HomeScreen extends StatelessWidget {
                   const SizedBox(width: 8),
                   _HeaderIconButton(
                     icon: Icons.logout_rounded,
-                    onTap: () => FirebaseAuth.instance.signOut(),
+                    onTap: () async {
+                      await authService.logout();
+                      if (context.mounted) {
+                        Navigator.of(context).pushReplacementNamed('/');
+                      }
+                    },
                   ),
                 ],
                 bottom: Column(
@@ -181,7 +186,7 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  String _displayName(User? user) {
+  String _displayName(AppUser? user) {
     final email = user?.email;
     if (email == null || email.isEmpty) {
       return 'student rider';
@@ -489,7 +494,7 @@ class _NotificationBell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = authService.currentUser;
     if (user == null) return const SizedBox.shrink();
 
     return StreamBuilder<QuerySnapshot>(

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:unipool/services/auth_service.dart';
 import 'package:intl/intl.dart';
 import 'package:unipool/screens/chat_screen.dart';
 import 'package:unipool/screens/create_ride_screen.dart';
@@ -221,7 +221,7 @@ class RideList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser!;
+    final user = authService.currentUser!;
 
     final query = isLeader
         ? FirebaseFirestore.instance
